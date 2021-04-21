@@ -1,0 +1,224 @@
+---
+title: "Homework 3"
+author: "Audrey Bahr"
+date: "4/20/21"
+output: html_notebook
+---
+```{r}
+library(tidyverse)
+library(cowplot)
+library(broom)
+```
+
+
+##CHALLENGE 1:
+The comparative primate dataset we have used from Kamilar and Cooper has in it a large number of variables related to life history and body size. For this exercise, the end aim is to fit a simple linear regression model to predict weaning age (WeaningAge_d) measured in days from species’ brain size (Brain_Size_Species_Mean) measured in grams. Do the following for both weaning age ~ brain size and log(weaning age) ~ log(brain size).
+
+Fit the regression model and, using {ggplot2}, produce a scatterplot with the fitted line superimposed upon the data. Append the the fitted model equation to your plot.
+HINT: See the function geom_text().
+
+Identify and interpret the point estimate of the slope ( 
+β1), as well as the outcome of the test associated with the hypotheses  
+H0:β1=0,HA: β1≠0. Also, find a 90% CI for the slope ( β1) parameter.
+
+Using your model, add lines for the 90% confidence and prediction interval bands on the plot, and add a legend to differentiate between the lines.
+Produce a point estimate and associated 90% prediction interval for the weaning age of a species whose brain weight is 750 gm. Do you trust the model to predict observations accurately for this value of the explanatory variable? Why or why not?
+Looking at your two models (i.e., untransformed versus log-log transformed), which do you think is better? Why?
+
+
+```{r}
+m <- lm(data = d, height ~ weight)
+summary(m)
+
+m.summary <- tidy(m)
+m.summary$calc.statistic <- (m.summary$estimate - 0) / m.summary$std.error
+m.summary$calc.p.value <- 2 * pt(m.summary$calc.statistic,
+                                 df = nrow(d) - 2, lower.tail = FALSE
+)
+
+
+beta0 <- m.summary %>%
+  filter(term == "(Intercept)") %>%
+  pull(estimate)
+beta1 <- m.summary %>%
+  filter(term == "weight") %>%
+  pull(estimate)
+(h.hat <- beta1 * 150 + beta0)
+
+beta1 <- cor(d$Brain_Size_Species_Mean, d$WeaningAge_d, use = "complete.obs") * (sd(d$WeaningAge_d, na.rm = T) / sd(d$Brain_Size_Species_Mean, na.rm = T))
+
+
+
+```
+```{r}
+# read in data
+kc <- read_csv("https://raw.githubusercontent.com/difiore/ada-2021-datasets/main/KamilarAndCooperData.csv", col_names = TRUE)
+
+# select variables for model
+d <- kc %>% 
+  select(WeaningAge_d, Brain_Size_Species_Mean) %>%
+  na.omit(kc)
+
+# linear model
+model1 <- lm(WeaningAge_d~Brain_Size_Species_Mean, data=d)
+summary(model1)
+
+# make equation label (adapted from StackOverflow)
+eq <- substitute(y == b %.% x + a, 
+         list(a = format(unname(coef(model1)[1]), digits = 3),
+              b = format(unname(coef(model1)[2]), digits = 3))) %>%
+  as.expression() %>%
+  as.character()
+
+# plot data with regression line
+g1 <- ggplot(d, aes(y=WeaningAge_d, x=Brain_Size_Species_Mean)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE, color = "black") +
+  ggtitle("Weaning Age vs Mean Brain Size") +
+  ylab("Weaning Age (days)") +
+  xlab("Mean Brain Size (g)") +
+  theme_minimal() +
+  geom_text(y = 250, x = 425, label = eq, parse = TRUE )
+
+g1
+```
+
+```{r}
+(CI <- confint(model1, level = .9))
+```
+*An increase in mean brain size by 1g suggests an increase in weaning age by 2.64 days. We reject the null hypothesis that a change in mean brain size has no effect on weaning age (t = 14.28, p < 0.001). We are 90% confident that the change in weaning age per one-gram increase in brain size is between 2.33 and 2.94 days.*
+
+```{r}
+# 90% confidence intervals
+df <- augment(model1, se_fit = TRUE)
+
+ci <- predict(model1,
+  newdata = data.frame(Brain_Size_Species_Mean = d$Brain_Size_Species_Mean),
+  interval = "confidence", level = .9
+) %>% 
+  data.frame() %>%
+  mutate(Brain_Size_Species_Mean = df$Brain_Size_Species_Mean)
+
+# 90% prediction intervals
+
+pi <- predict(model1,
+  newdata = data.frame(Brain_Size_Species_Mean = d$Brain_Size_Species_Mean),
+  interval = "prediction", level = 0.90
+) %>%
+  data.frame() %>%
+  mutate("Brain_Size_Species_Mean" = d$Brain_Size_Species_Mean)
+
+# adding ci and pi lines to plot
+g1 + 
+  geom_line(
+  data = ci, aes(x = Brain_Size_Species_Mean, y = lwr, color = "90% CI")) + 
+  geom_line(
+  data = ci, aes(x = Brain_Size_Species_Mean, y = upr, color = "90% CI")) +
+  geom_line(data = pi, aes(x = Brain_Size_Species_Mean, y = lwr, color = "90% PI")) +
+  geom_line(data = pi, aes(x = Brain_Size_Species_Mean, y = upr, color = "90% PI")) +
+  scale_color_manual(name = "Line Color", values = c(`90% PI` = "purple", `90% CI` = "light green"))
+```
+
+```{r}
+predict(model1,
+  newdata = data.frame(Brain_Size_Species_Mean = 750),
+  interval = "prediction", level = 0.90
+) 
+```
+I would not trust this estimate because we do not have data for brain sizes that high. Most of the mean brain sizes are less than 200g, so extrapolating the relationship between the two variables out to 750g may be inaccurate.
+
+Repeated for the log of the variables.
+```{r}
+# calculate log
+d <- d %>% 
+  mutate(logWA = log(WeaningAge_d), logBSSM = log(Brain_Size_Species_Mean))
+
+# linear model
+model2 <- lm(logWA ~ logBSSM, data=d)
+summary(model2)
+# make equation label
+eq <- substitute(y == b %.% x + a, 
+         list(a = format(unname(coef(model2)[1]), digits = 3),
+              b = format(unname(coef(model2)[2]), digits = 3))) %>%
+  as.expression() %>%
+  as.character()
+
+# plot data with regression line
+g2 <- ggplot(d, aes(y=logWA, x=logBSSM)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE, color = "black") +
+  ggtitle("Log of Mean Brain Size vs Log of Weaning Age") +
+  ylab("Log of Weaning Age") +
+  xlab("Log of Mean Brain Size") +
+  theme_minimal() +
+  geom_text(y = 4, x = 4.5, label = eq, parse = TRUE )
+```
+
+```{r}
+(CI <- confint(model2, level = 1 - 0.1))
+```
+*An increase in mean brain size by 1% suggests an increase in the log of weaning age by 0.571%. We reject the null hypothesis that a change in the log of mean brain size has no effect on the log of weaning age (t = 18.66, p < 0.001). We are 90% confident that the percent change in weaning age per percent increase in mean brain size is between 0.52% and 0.62%.*
+
+```{r}
+# 90% confidence intervals
+df <- augment(model2, se_fit = TRUE)
+
+ci <- predict(model2,
+  newdata = data.frame(logBSSM = d$logBSSM),
+  interval = "confidence", level = .9
+) %>% 
+  data.frame() %>%
+  mutate(logBSSM = df$logBSSM)
+
+# 90% prediction intervals
+
+pi <- predict(model2,
+  newdata = data.frame(logBSSM = d$logBSSM),
+  interval = "prediction", level = 0.90
+) %>%
+  data.frame() %>%
+  mutate("logBSSM" = d$logBSSM)
+
+# adding ci and pi lines to plot
+g2 + 
+  geom_line(
+  data = ci, aes(x = logBSSM, y = lwr, color = "90% CI")) + 
+  geom_line(
+  data = ci, aes(x = logBSSM, y = upr, color = "90% CI")) +
+  geom_line(data = pi, aes(x = logBSSM, y = lwr, color = "90% PI")) +
+  geom_line(data = pi, aes(x = logBSSM, y = upr, color = "90% PI")) +
+  scale_color_manual(name = "Line Color", values = c(`90% PI` = "purple", `90% CI` = "light green"))
+```
+
+```{r}
+predict(model2,
+  newdata = data.frame(logBSSM = log(750)),
+  interval = "prediction", level = 0.90
+) 
+```
+*I would trust this estimate a bit more now that the data is scaled and we have more points close to x = log(750). In general, I think the log-log transformed model is better than the untransformed one because the data are more normally distributed and have a more linear relationship, which improves the accuracy of the model.*
+
+##CHALLENGE 2:
+When we initially discussed the central limit theorem and confidence intervals, we showed how we could use bootstrapping to estimate standard errors and confidence intervals around certain parameter values, like the mean. Using bootstrapping, we can also do the same for estimating standard errors and CIs around regression parameters, such as β coefficients.
+
+Using the “KamilarAndCooperData.csv” dataset, run a linear regression looking at log(MeanGroupSize) in relation to log(Body_mass_female_mean) and report your β coeffiecients (slope and intercept).
+```{r}
+
+```
+
+
+
+Then, use bootstrapping to sample from the dataset 1000 times with replacement, each time fitting the same model and calculating the appropriate coefficients. [The size of each sample should be equivalent to the total number of observations in the dataset.] This generates a bootstrap sampling distribution for each β coefficient. Plot a histogram of these sampling distributions for β
+0
+  and  
+β
+1
+ .
+Estimate the standard error for each of your  
+β
+  coefficients as the standard deviation of the sampling distribution from your bootstrap.
+Also determine the 95% CI for each of your  
+β
+  coefficients based on the appropriate quantiles from your sampling distribution.
+How do the SEs estimated from the bootstrap sampling distribution compare to those estimated mathematically as part of lm() function?
+How do your bootstrap CIs compare to those estimated mathematically as part of the lm() function?
