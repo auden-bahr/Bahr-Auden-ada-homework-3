@@ -84,7 +84,7 @@ g1
 ```
 
 ```{r}
-(CI <- confint(model1, level = .9))
+confint(model1, level = .9)
 ```
 *An increase in mean brain size by 1g suggests an increase in weaning age by 2.64 days. We reject the null hypothesis that a change in mean brain size has no effect on weaning age (t = 14.28, p < 0.001). We are 90% confident that the change in weaning age per one-gram increase in brain size is between 2.33 and 2.94 days.*
 
@@ -203,22 +203,83 @@ When we initially discussed the central limit theorem and confidence intervals, 
 
 Using the “KamilarAndCooperData.csv” dataset, run a linear regression looking at log(MeanGroupSize) in relation to log(Body_mass_female_mean) and report your β coeffiecients (slope and intercept).
 ```{r}
+# calculate log
+d2 <- kc %>% 
+  mutate(logMGS = log(MeanGroupSize), logBMFM = log(Body_mass_female_mean)) %>%
+  select(logMGS, logBMFM) %>%
+  na.omit(kc)
 
+# linear model
+model_c2 <- lm(logMGS ~ logBMFM, data=d2)
+
+# beta coefficients
+coef(model_c2)
+```
+*The beta coefficients are -1.78 for the intercept and 0.506 for log of mean female body mass.*
+
+
+Then, use bootstrapping to sample from the dataset 1000 times with replacement, each time fitting the same model and calculating the appropriate coefficients. [The size of each sample should be equivalent to the total number of observations in the dataset.] This generates a bootstrap sampling distribution for each β coefficient. Plot a histogram of these sampling distributions for β0 and β1.
+```{r}
+set.seed(245234)
+b0 <- vector(length = 1000)
+b1 <- vector(length = 1000)
+for (i in 1:1000) {
+  
+  slice <- d2 %>%
+    slice_sample(n = nrow(d2), replace = TRUE)
+  
+  lm <- lm(logMGS ~ logBMFM, data=slice)
+  
+  b0[i] <- coef(lm)[[1]]
+  b1[i] <- coef(lm)[[2]]
+  
+}
+
+ggplot() +
+  aes(b0) +
+  geom_histogram() +
+  theme_half_open() +
+  ggtitle(expression("Bootstrap Distribution for" ~ beta[0])) +
+  xlab(expression(beta[0])) +
+  ylab("Count")
+
+ggplot() +
+  aes(b1) +
+  geom_histogram() +
+  theme_half_open() +
+  ggtitle(expression("Bootstrap Distribution for" ~ beta[1])) +
+  xlab(expression(beta[1])) +
+  ylab("Count")
 ```
 
+Estimate the standard error for each of your β coefficients as the standard deviation of the sampling distribution from your bootstrap.
 
+```{r}
+print(paste("Standard error for β0:", round(sd(b0), 3)))
+print(paste("Standard error for β1:", round(sd(b1), 3)))
+```
 
-Then, use bootstrapping to sample from the dataset 1000 times with replacement, each time fitting the same model and calculating the appropriate coefficients. [The size of each sample should be equivalent to the total number of observations in the dataset.] This generates a bootstrap sampling distribution for each β coefficient. Plot a histogram of these sampling distributions for β
-0
-  and  
-β
-1
- .
-Estimate the standard error for each of your  
-β
-  coefficients as the standard deviation of the sampling distribution from your bootstrap.
-Also determine the 95% CI for each of your  
-β
+Also determine the 95% CI for each of your β
   coefficients based on the appropriate quantiles from your sampling distribution.
+```{r}
+print(paste0(
+  "95% CI for β0: [", round(quantile(b0, 0.025), 3), ", ", round(quantile(b0, 0.975), 3), "]" 
+))
+
+print(paste0(
+  "95% CI for β1: [", round(quantile(b1, 0.025), 3), ", ", round(quantile(b1, 0.975), 3), "]" 
+))
+```
+  
+  
 How do the SEs estimated from the bootstrap sampling distribution compare to those estimated mathematically as part of lm() function?
+```{r}
+tidy(model_c2)$std.error
+```
+*The SEs estimated from the bootstrap are slightly higher.*
+
 How do your bootstrap CIs compare to those estimated mathematically as part of the lm() function?
+```{r}
+confint(model_c2, level = .95)
+```
+*The confidence intervals for both estimates are wider for the bootstrap estimate than the lm() function.*
