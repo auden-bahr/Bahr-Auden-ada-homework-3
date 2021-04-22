@@ -2,54 +2,22 @@
 title: "Homework 3"
 author: "Audrey Bahr"
 date: "4/20/21"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 ```{r}
 library(tidyverse)
 library(cowplot)
 library(broom)
+set.seed(245234)
 ```
-
 
 ##CHALLENGE 1:
 The comparative primate dataset we have used from Kamilar and Cooper has in it a large number of variables related to life history and body size. For this exercise, the end aim is to fit a simple linear regression model to predict weaning age (WeaningAge_d) measured in days from species’ brain size (Brain_Size_Species_Mean) measured in grams. Do the following for both weaning age ~ brain size and log(weaning age) ~ log(brain size).
 
 Fit the regression model and, using {ggplot2}, produce a scatterplot with the fitted line superimposed upon the data. Append the the fitted model equation to your plot.
-HINT: See the function geom_text().
 
-Identify and interpret the point estimate of the slope ( 
-β1), as well as the outcome of the test associated with the hypotheses  
-H0:β1=0,HA: β1≠0. Also, find a 90% CI for the slope ( β1) parameter.
-
-Using your model, add lines for the 90% confidence and prediction interval bands on the plot, and add a legend to differentiate between the lines.
-Produce a point estimate and associated 90% prediction interval for the weaning age of a species whose brain weight is 750 gm. Do you trust the model to predict observations accurately for this value of the explanatory variable? Why or why not?
-Looking at your two models (i.e., untransformed versus log-log transformed), which do you think is better? Why?
-
-
-```{r}
-m <- lm(data = d, height ~ weight)
-summary(m)
-
-m.summary <- tidy(m)
-m.summary$calc.statistic <- (m.summary$estimate - 0) / m.summary$std.error
-m.summary$calc.p.value <- 2 * pt(m.summary$calc.statistic,
-                                 df = nrow(d) - 2, lower.tail = FALSE
-)
-
-
-beta0 <- m.summary %>%
-  filter(term == "(Intercept)") %>%
-  pull(estimate)
-beta1 <- m.summary %>%
-  filter(term == "weight") %>%
-  pull(estimate)
-(h.hat <- beta1 * 150 + beta0)
-
-beta1 <- cor(d$Brain_Size_Species_Mean, d$WeaningAge_d, use = "complete.obs") * (sd(d$WeaningAge_d, na.rm = T) / sd(d$Brain_Size_Species_Mean, na.rm = T))
-
-
-
-```
 ```{r}
 # read in data
 kc <- read_csv("https://raw.githubusercontent.com/difiore/ada-2021-datasets/main/KamilarAndCooperData.csv", col_names = TRUE)
@@ -82,6 +50,11 @@ g1 <- ggplot(d, aes(y=WeaningAge_d, x=Brain_Size_Species_Mean)) +
 
 g1
 ```
+
+Identify and interpret the point estimate of the slope (β1), as well as the outcome of the test associated with the hypotheses  
+H0:β1=0,HA: β1≠0. Also, find a 90% CI for the slope (β1) parameter.
+
+Using your model, add lines for the 90% confidence and prediction interval bands on the plot, and add a legend to differentiate between the lines.
 
 ```{r}
 confint(model1, level = .9)
@@ -119,6 +92,7 @@ g1 +
   scale_color_manual(name = "Line Color", values = c(`90% PI` = "purple", `90% CI` = "light green"))
 ```
 
+Produce a point estimate and associated 90% prediction interval for the weaning age of a species whose brain weight is 750 gm. Do you trust the model to predict observations accurately for this value of the explanatory variable? Why or why not?
 ```{r}
 predict(model1,
   newdata = data.frame(Brain_Size_Species_Mean = 750),
@@ -152,6 +126,8 @@ g2 <- ggplot(d, aes(y=logWA, x=logBSSM)) +
   xlab("Log of Mean Brain Size") +
   theme_minimal() +
   geom_text(y = 4, x = 4.5, label = eq, parse = TRUE )
+
+g2
 ```
 
 ```{r}
@@ -196,7 +172,11 @@ predict(model2,
   interval = "prediction", level = 0.90
 ) 
 ```
-*I would trust this estimate a bit more now that the data is scaled and we have more points close to x = log(750). In general, I think the log-log transformed model is better than the untransformed one because the data are more normally distributed and have a more linear relationship, which improves the accuracy of the model.*
+*I would trust this estimate a bit more now that the data is scaled and we have more points close to x = log(750).*
+
+Looking at your two models (i.e., untransformed versus log-log transformed), which do you think is better? Why?
+
+*In general, I think the log-log transformed model is better than the untransformed one because the data are more normally distributed and have a more linear relationship, which improves the accuracy of the model.*
 
 ##CHALLENGE 2:
 When we initially discussed the central limit theorem and confidence intervals, we showed how we could use bootstrapping to estimate standard errors and confidence intervals around certain parameter values, like the mean. Using bootstrapping, we can also do the same for estimating standard errors and CIs around regression parameters, such as β coefficients.
@@ -217,10 +197,8 @@ coef(model_c2)
 ```
 *The beta coefficients are -1.78 for the intercept and 0.506 for log of mean female body mass.*
 
-
 Then, use bootstrapping to sample from the dataset 1000 times with replacement, each time fitting the same model and calculating the appropriate coefficients. [The size of each sample should be equivalent to the total number of observations in the dataset.] This generates a bootstrap sampling distribution for each β coefficient. Plot a histogram of these sampling distributions for β0 and β1.
 ```{r}
-set.seed(245234)
 b0 <- vector(length = 1000)
 b1 <- vector(length = 1000)
 for (i in 1:1000) {
@@ -237,7 +215,7 @@ for (i in 1:1000) {
 
 ggplot() +
   aes(b0) +
-  geom_histogram() +
+  geom_histogram(bins = 25) +
   theme_half_open() +
   ggtitle(expression("Bootstrap Distribution for" ~ beta[0])) +
   xlab(expression(beta[0])) +
@@ -245,7 +223,7 @@ ggplot() +
 
 ggplot() +
   aes(b1) +
-  geom_histogram() +
+  geom_histogram(bins = 25) +
   theme_half_open() +
   ggtitle(expression("Bootstrap Distribution for" ~ beta[1])) +
   xlab(expression(beta[1])) +
@@ -259,8 +237,7 @@ print(paste("Standard error for β0:", round(sd(b0), 3)))
 print(paste("Standard error for β1:", round(sd(b1), 3)))
 ```
 
-Also determine the 95% CI for each of your β
-  coefficients based on the appropriate quantiles from your sampling distribution.
+Also determine the 95% CI for each of your β coefficients based on the appropriate quantiles from your sampling distribution.
 ```{r}
 print(paste0(
   "95% CI for β0: [", round(quantile(b0, 0.025), 3), ", ", round(quantile(b0, 0.975), 3), "]" 
@@ -271,7 +248,6 @@ print(paste0(
 ))
 ```
   
-  
 How do the SEs estimated from the bootstrap sampling distribution compare to those estimated mathematically as part of lm() function?
 ```{r}
 tidy(model_c2)$std.error
@@ -280,6 +256,113 @@ tidy(model_c2)$std.error
 
 How do your bootstrap CIs compare to those estimated mathematically as part of the lm() function?
 ```{r}
+# lm CI
 confint(model_c2, level = .95)
 ```
 *The confidence intervals for both estimates are wider for the bootstrap estimate than the lm() function.*
+
+##CHALLENGE 3:
+Write your own function, called boot_lm(), that takes as its arguments a dataframe (d=), a linear model (model=, written as a character string, e.g., “logGS ~ logBM”), a user-defined confidence interval level (conf.level=, with default “0.95”), and a number of bootstrap replicates (reps=, with default “1000”).
+
+Your function should return a dataframe that includes: the β coefficient names (β0, β1, etc.); the value of the β coefficients, their standard errors, and their upper and lower CI limits for the linear model based on your original dataset; and the mean β coefficient estimates, SEs, and CI limits for those coefficients based on your bootstrap.
+
+```{r}
+boot_lm <- function(d, model, conf.level = 0.95, reps = 1000) {
+  
+  # run linear model
+  m <- lm(model, data = d)
+  m_stats <- tidy(m) %>%
+    select(estimate, std.error)
+  colnames(m_stats) <- c("Lm_Est", "Lm_SE")
+  
+  num_b <- nrow(m_stats)
+  
+  # calculate confidence interval from lm
+  m_ci <- data.frame(confint(m, level = conf.level))
+  colnames(m_ci) <- c("LmCI_lower", "LmCI_upper")
+  
+  # run bootstrap
+  boot <- data.frame(matrix(nrow = reps, ncol = num_b))
+
+  for (i in 1:reps) {
+    
+    slice <- d %>%
+      slice_sample(n = nrow(d), replace = TRUE)
+    
+    lm <- lm(model, data=slice)
+    
+    # store coefficients
+    for (j in 1:num_b) {
+      boot[i, j] <- coef(lm)[[j]]
+    }
+    
+  }
+  
+  # calculate bootstrap statistics
+  boot_stats <- data.frame(matrix(nrow = num_b, ncol = 4))
+  colnames(boot_stats) <- c("Boot_Est", "Boot_SE", "BootCI_lower", "BootCI_upper")
+  for (k in 1:num_b) {
+    boot_stats[k, 1] <- mean(boot[,k])
+    boot_stats[k, 2] <- sd(boot[,k])
+    boot_stats[k, 3] <- quantile(boot[,k], 0.025)
+    boot_stats[k, 4] <- quantile(boot[,k], 0.975)
+  }
+  
+  
+  # assemble output
+  outpt <- cbind(m_stats, m_ci, boot_stats)
+  # return output
+  return(outpt)
+}
+```
+
+Use your function to run the following models on the “KamilarAndCooperData.csv” dataset:
+
+log(MeanGroupSize) ~ log(Body_mass_female_mean)
+log(DayLength_km) ~ log(Body_mass_female_mean)
+log(DayLength_km) ~ log(Body_mass_female_mean) + log(MeanGroupSize)
+
+```{r}
+(outpt1 <- boot_lm(kc, "log(MeanGroupSize) ~ log(Body_mass_female_mean)"))
+(outpt2 <- boot_lm(kc, "log(DayLength_km) ~ log(Body_mass_female_mean)"))
+(outpt3 <- boot_lm(kc, "log(DayLength_km) ~ log(Body_mass_female_mean) + log(MeanGroupSize)"))
+```
+
+##EXTRA CREDIT:
+Using a loop, run your function from Challenge 3 to generate mean β1 coefficents and lower and upper limits for the 95% CI for the log(MeanGroupSize) ~ log(Body_mass_female_mean) model with different numbers of bootstrap replicates from 10 to 200 by 5s and plot these using {ggplot2}. That is, plot these as three LINES, with the number of replicates as the x aesthetic and the mean, lower CI limit, and upper CI limit from each set of replicates as the y aesthetic. Also plot as a horizontal line the β1 value from the original linear model
+
+HINT: The mean β1 value from each set of bootstrap replicates may not differ that much from the original model!
+
+```{r}
+seq <- seq(10, 200, 5)
+store <- data.frame(matrix(nrow = length(seq), ncol = 5))
+colnames(store) <- c("Reps", "Boot_Est", "Boot_SE", "BootCI_lower", "BootCI_upper")
+for (i in (1:length(seq))) {
+  temp <- boot_lm(kc, "log(MeanGroupSize) ~ log(Body_mass_female_mean)", reps = seq[i])
+  store[i, 1] <- seq[i]
+  store[i, 2] <- temp[2, 5]
+  store[i, 3] <- temp[2, 6]
+  store[i, 4] <- temp[2, 7]
+  store[i, 5] <- temp[2, 8]
+}
+```
+
+```{r}
+ggplot(store) +
+  geom_line(aes(y = outpt1[2,1], x = Reps)) +
+  geom_line(aes(Reps, Boot_Est)) +
+  geom_line(aes(Reps, BootCI_lower)) +
+  geom_line(aes(Reps, BootCI_upper)) +
+  theme_minimal() + 
+  ggtitle(expression("Bootstrap Estimates for" ~ beta[1]), subtitle = "with 95% CI") +
+  ylab(expression(beta[1])) +
+  xlab("Bootstrap Replicates")
+```
+
+
+
+
+
+
+
+
